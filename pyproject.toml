@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gaspipe"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.10.5"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3.4", "pytest-cov>=6.0.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"

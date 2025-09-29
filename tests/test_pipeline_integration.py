@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Integration test for full pipeline with mocks."""
+import json
+import shutil
+from pathlib import Path
+
+import pytest
+
+from src.gaspipe.cli import main
+
+
+@pytest.fixture
+def test_environment(tmp_path, monkeypatch):
+    """Set up test environment with fixtures and mocks."""
+    # Create test directories
+    fixtures_dir = tmp_path / "fixtures"
+    fixtures_dir.mkdir()
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    
+    # Create minimal test video (placeholder)
+    test_video = fixtures_dir / "test_360.mp4"
+    test_video.write_bytes(b"FAKE_VIDEO_DATA")
+    
+    # Point to mock scripts
+    mock_scripts_dir = Path(__file__).parent.parent / "scripts"
+    monkeypatch.setenv("RC_CLI_PATH", str(mock_scripts_dir / "mock_rc_cli.py"))
+    monkeypatch.setenv("POSTSHOT_CLI_PATH", str(mock_scripts_dir / "mock_postshot_cli.py"))
+    
+    return {
+        "video": test_video,
+        "output": output_dir,
+        "fixtures": fixtures_dir
+    }
+
+
+def test_full_pipeline_run(test_environment, monkeypatch):
+    """Test complete pipeline execution with mocks."""
+    import sys
+    
+    # Simulate CLI call
+    monkeypatch.setattr(sys, 'argv', [
+        'gaspipe',
+        'run',
+        str(test_environment["video"]),
+        str(test_environment["output"]),
+        '--log-level', 'DEBUG'
+    ])
+    
+    exit_code = main()
+    
+    assert exit_code == 0, "Pipeline should complete successfully"
+    
+    # Verify checkpoint created
+    checkpoint_file = test_environment["output"] / "checkpoint.json"
+    assert checkpoint_file.exists(), "Checkpoint file should exist"
+    
+    with open(checkpoint_file) as f:
+        checkpoint = json.load(f)
+    
+    assert "run_id" in checkpoint
+    assert checkpoint["current_step"] in ["postshot", "completed"]
+    
+    # Verify manifest entries
+    assert len(checkpoint["manifest"]) == 4  # frames, cubemap, RC, postshot
+    
+    # Verify .ok files created for key outputs
+    frames_dir = test_environment["output"] / "frames"
+    if frames_dir.exists():
+        ok_files = list(frames_dir.glob("*.ok"))
+        assert len(ok_files) > 0, "Should have .ok markers for frames"
+
+
+def test_pipeline_resume(test_environment, monkeypatch, tmp_path):
+    """Test pipeline resume from checkpoint."""
+    import sys
+    
+    # Create partial checkpoint
+    checkpoint_file = test_environment["output"] / "checkpoint.json"
+    checkpoint_data = {
+        "run_id": "test-resume-123",
+        "video_file": str(test_environment["video"]),
+        "output_dir": str(test_environment["output"]),
+        "current_step": "cubemap",
+        "manifest": [
+            {
+                "step": "frames",
+                "status": "completed",
+                "started_at": "2025-01-15T10:00:00Z",
+                "completed_at": "2025-01-15T10:05:00Z",
+                "outputs": [],
+                "sha256_sums": {}
+            },
+            {
+                "step": "cubemap",
+                "status": "pending",
+                "started_at": "2025-01-15T10:05:00Z",
+                "outputs": [],
+                "sha256_sums": {}
+            }
+        ],
+        "config_snapshot": {},
+        "created_at": "2025-01-15T10:00:00Z",
+        "updated_at": "2025-01-15T10:05:00Z"
+    }
+    
+    with open(checkpoint_file, 'w') as f:
+        json.dump(checkpoint_data, f)
+    
+    # Resume pipeline
+    monkeypatch.setattr(sys, 'argv', [
+        'gaspipe',
+        'resume',
+        str(test_environment["output"])
+    ])
+    
+    exit_code = main()
+    
+    assert exit_code == 0, "Resume should complete successfully"
+    
+    # Verify checkpoint updated
+    with open(checkpoint_file) as f:
+        updated_checkpoint = json.load(f)
+    
+    # Should have progressed beyond cubemap
+    completed_steps = [
+        entry["step"] for entry in updated_checkpoint["manifest"] 
+        if entry["status"] == "completed"
+    ]
+    assert "cubemap" in completed_steps or updated_checkpoint["current_step"] != "cubemap"
