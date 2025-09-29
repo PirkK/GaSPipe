@@ -2,7 +2,7 @@
 """Main pipeline orchestration."""
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, UTC
 import uuid
 
 from .types import ProjectCheckpoint, ManifestEntry
@@ -53,27 +53,27 @@ def run_pipeline(
             ManifestEntry(
                 step="frames",
                 status="pending",
-                started_at=datetime.utcnow()
+                started_at=datetime.now(UTC)
             ),
             ManifestEntry(
                 step="cubemap",
                 status="pending",
-                started_at=datetime.utcnow()
+                started_at=datetime.now(UTC)
             ),
             ManifestEntry(
                 step="realitycapture",
                 status="pending",
-                started_at=datetime.utcnow()
+                started_at=datetime.now(UTC)
             ),
             ManifestEntry(
                 step="postshot",
                 status="pending",
-                started_at=datetime.utcnow()
+                started_at=datetime.now(UTC)
             )
         ],
         config_snapshot=config,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC)
     )
     
     # Save initial checkpoint

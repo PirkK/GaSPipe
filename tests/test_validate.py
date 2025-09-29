@@ -111,7 +111,7 @@ def test_validate_checkpoint_not_found():
 def test_validate_checkpoint_success(tmp_path):
     """Test successful checkpoint validation."""
     import json
-    from datetime import datetime
+    from datetime import datetime, UTC
     
     checkpoint_file = tmp_path / "checkpoint.json"
     checkpoint_data = {
@@ -123,14 +123,14 @@ def test_validate_checkpoint_success(tmp_path):
             {
                 "step": "frames",
                 "status": "completed",
-                "started_at": datetime.utcnow().isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "outputs": [],
                 "sha256_sums": {}
             }
         ],
         "config_snapshot": {},
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat()
+        "created_at": datetime.now(UTC).isoformat(),
+        "updated_at": datetime.now(UTC).isoformat()
     }
     
     with open(checkpoint_file, 'w') as f:
