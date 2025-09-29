@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Integration test for full pipeline with mocks."""
 import json
-import uuid
 from pathlib import Path
 
 import pytest
 
+# ✅ CORRETTO: import da 'gaspipe', non 'src.gaspipe'
 from gaspipe.cli import main
 
 
@@ -38,16 +38,14 @@ def test_full_pipeline_run(test_environment, monkeypatch):
     """Test complete pipeline execution with mocks."""
     import sys
     
-    # Simulate CLI call - FIX: Set argv before calling main()
-    test_args = [
+    # Simulate CLI call
+    monkeypatch.setattr(sys, 'argv', [
         'gaspipe',
-        '--log-level', 'DEBUG',  # ✅ Prima del subcommand
         'run',
-     str(test_environment["video"]),
-     str(test_environment["output"])
-]
-    
-    monkeypatch.setattr(sys, 'argv', test_args)
+        str(test_environment["video"]),
+        str(test_environment["output"]),
+        '--log-level', 'DEBUG'
+    ])
     
     exit_code = main()
     
@@ -61,22 +59,26 @@ def test_full_pipeline_run(test_environment, monkeypatch):
         checkpoint = json.load(f)
     
     assert "run_id" in checkpoint
-    assert checkpoint["current_step"] in ["frames", "cubemap", "realitycapture", "postshot"]
+    assert checkpoint["current_step"] in ["postshot", "completed"]
     
     # Verify manifest entries
     assert len(checkpoint["manifest"]) == 4  # frames, cubemap, RC, postshot
+    
+    # Verify .ok files created for key outputs
+    frames_dir = test_environment["output"] / "frames"
+    if frames_dir.exists():
+        ok_files = list(frames_dir.glob("*.ok"))
+        assert len(ok_files) > 0, "Should have .ok markers for frames"
 
 
 def test_pipeline_resume(test_environment, monkeypatch):
     """Test pipeline resume from checkpoint."""
     import sys
     
-    # Create partial checkpoint with VALID UUID
+    # Create partial checkpoint
     checkpoint_file = test_environment["output"] / "checkpoint.json"
-    valid_uuid = str(uuid.uuid4())  # Generate valid UUID4
-    
     checkpoint_data = {
-        "run_id": valid_uuid,  # FIX: Use valid UUID
+        "run_id": "test-resume-123",
         "video_file": str(test_environment["video"]),
         "output_dir": str(test_environment["output"]),
         "current_step": "cubemap",
@@ -95,20 +97,6 @@ def test_pipeline_resume(test_environment, monkeypatch):
                 "started_at": "2025-01-15T10:05:00Z",
                 "outputs": [],
                 "sha256_sums": {}
-            },
-            {
-                "step": "realitycapture",
-                "status": "pending",
-                "started_at": "2025-01-15T10:05:00Z",
-                "outputs": [],
-                "sha256_sums": {}
-            },
-            {
-                "step": "postshot",
-                "status": "pending",
-                "started_at": "2025-01-15T10:05:00Z",
-                "outputs": [],
-                "sha256_sums": {}
             }
         ],
         "config_snapshot": {},
@@ -120,13 +108,11 @@ def test_pipeline_resume(test_environment, monkeypatch):
         json.dump(checkpoint_data, f)
     
     # Resume pipeline
-    test_args = [
+    monkeypatch.setattr(sys, 'argv', [
         'gaspipe',
         'resume',
         str(test_environment["output"])
-    ]
-    
-    monkeypatch.setattr(sys, 'argv', test_args)
+    ])
     
     exit_code = main()
     
@@ -136,5 +122,9 @@ def test_pipeline_resume(test_environment, monkeypatch):
     with open(checkpoint_file) as f:
         updated_checkpoint = json.load(f)
     
-    # Verify it's the same run_id
-    assert updated_checkpoint["run_id"] == valid_uuid
+    # Should have progressed beyond cubemap
+    completed_steps = [
+        entry["step"] for entry in updated_checkpoint["manifest"] 
+        if entry["status"] == "completed"
+    ]
+    assert "cubemap" in completed_steps or updated_checkpoint["current_step"] != "cubemap"

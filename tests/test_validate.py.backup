@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from gaspipe.validate import (
+from src.gaspipe.validate import (
     validate_frameindex,
     validate_camera_poses,
     validate_checkpoint,

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from gaspipe.subprocess_wrapper import run_subprocess, SubprocessError, _is_transient_error
+from src.gaspipe.subprocess_wrapper import run_subprocess, SubprocessError, _is_transient_error
 
 
 def test_successful_execution():
