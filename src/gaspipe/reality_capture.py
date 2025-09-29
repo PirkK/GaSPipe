@@ -108,10 +108,11 @@ class RealityCaptureProcessor:
             raise
     
     def _count_poses(self, csv_path: Path) -> int:
-        """Count valid poses in CSV."""
+        """Count valid poses in CSV - FIXED to skip header."""
         try:
             with open(csv_path, 'r') as f:
                 reader = csv.reader(f)
+                next(reader, None)  # ✅ Skip header row
                 return sum(1 for row in reader 
                           if row and not row[0].startswith('#') and len(row) > 10)
         except:
