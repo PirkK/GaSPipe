@@ -216,10 +216,11 @@ def resume_pipeline(checkpoint: ProjectCheckpoint) -> None:
             _save_checkpoint(checkpoint, checkpoint_path)
             
             # Load RC outputs
+            poses_csv_path = rc_dir / "camera_poses.csv"
             rc_output = {
                 'sparse_ply': rc_dir / "sparse_points.ply",
-                'poses_csv': rc_dir / "camera_poses.csv",
-                'pose_count': 0  # Will be recalculated
+                'poses_csv': poses_csv_path,
+                'pose_count': rc_proc._count_poses(poses_csv_path)  # ✅ Ricalcola realmente
             }
             
             video_name = checkpoint.video_file.stem
