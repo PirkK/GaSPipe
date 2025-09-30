@@ -3,215 +3,538 @@
 ## Quick Diagnostics
 
 ### Extract Logs for Error Tracing
+
 ```bash
 # Filter logs by run_id
-jq 'select(.run_id=="<RUN_ID>")' output/logs/*.log
+jq 'select(.run_id=="")' output/logs/*.log
 
 # Extract errors only
 jq 'select(.level=="ERROR")' output/logs/*.log
 
 # View subprocess failures
 jq 'select(.meta.stderr)' output/logs/*.log
+```
 
+### Enable Debug Logging
+
+```bash
 export LOG_LEVEL=DEBUG
-python -m src.gaspipe.cli run input.mp4 output/ --log-level DEBUG
+python -m gaspipe.cli run input.mp4 output/ --log-level DEBUG
+```
 
+---
+
+## Software Verification
+
+### Test All Dependencies
+
+```bash
 # FFmpeg
 ffmpeg -version
+ffmpeg -filters | grep v360
 
-# RealityCapture (check path)
-$RC_CLI_PATH -help
+# RealityCapture (Windows)
+"C:\Program Files\Epic Games\RealityScan_2.0\RealityScan.exe" -help
 
 # PostShot
-$POSTSHOT_CLI_PATH --help
+postshot-cli --help
 
 # Full self-test
-python -m src.gaspipe.cli self-test \
-  --rc-path=$RC_CLI_PATH \
-  --postshot-path=$POSTSHOT_CLI_PATH
+python -m gaspipe.cli self-test \
+  --rc-path="C:/Program Files/.../RealityCapture.exe" \
+  --postshot-path="C:/Program Files/.../postshot-cli.exe"
+```
 
-# View checkpoint
-jq '.' output/checkpoint.json
+---
 
-# Find failed step
+## Checkpoint Management
+
+### View Checkpoint Status
+
+```bash
+# Current step
+jq '.current_step' output/checkpoint.json
+
+# Find failed steps
 jq '.manifest[] | select(.status!="completed")' output/checkpoint.json
 
-python -m src.gaspipe.cli resume output/
+# All step statuses
+jq '.manifest[] | {step, status}' output/checkpoint.json
+```
 
+### Resume Pipeline
+
+```bash
+python -m gaspipe.cli resume output/
+```
+
+### Force Regeneration
+
+```bash
 # Remove .ok markers to force regeneration
 find output/ -name "*.ok" -delete
 
-# Verify integrity before resume
+# Or remove specific step markers
+find output/frames/ -name "*.ok" -delete
+```
+
+### Verify Integrity
+
+```bash
+# Check all SHA256 checksums
 find output/ -name "*.sha256" -exec bash -c \
   'sha256sum -c {} || echo "CORRUPT: {}"' \;
+```
 
+---
+
+## Output Validation
+
+### Check Generated Files
+
+```bash
+# Frame count
+ls output/frames/*.png | wc -l
+
+# Cubemap count (should be frames × 9)
+ls output/cubemap_images/*.png | wc -l
+
+# Sparse point cloud size
+ls -lh output/realitycapture_output/sparse_points.ply
+
+# Camera poses count
+wc -l output/realitycapture_output/camera_poses.csv
+
+# Final Gaussian Splat
+ls -lh output/gaussian_splat/*.psht
+```
+
+### Validate Outputs
+
+```bash
 # Find .psht files
 find output/gaussian_splat -name "*.psht"
 
 # Check file sizes
 du -sh output/gaussian_splat/*.psht
 
-# Frames
-ls -lh output/frames/ | head
+# Verify not corrupted
+file output/gaussian_splat/*.psht
+```
 
-# Cubemap images
-ls -lh output/cubemap_images/ | head
+---
 
-# RealityCapture sparse cloud
-ls -lh output/realitycapture_output/sparse_points.ply
+## Common Issues & Solutions
 
-# Camera poses
-wc -l output/realitycapture_output/camera_poses.csv
+### Issue: FFmpeg v360 filter not found
 
-docker images gaspipe --format "{{.Tag}}"
+**Symptoms**:
+```
+Unknown filter 'v360'
+```
 
-# Tag current as backup
-docker tag gaspipe:latest gaspipe:latest-backup
+**Diagnosis**:
+```bash
+ffmpeg -filters | grep v360
+# If empty, v360 not available
+```
 
-# Pull specific version
-docker tag gaspipe:<GIT_SHA> gaspipe:latest
+**Solution**:
+```bash
+# Windows: Install FFmpeg from official site with v360
+# Or use Scoop
+scoop install ffmpeg
 
-# Verify version
-docker run --rm gaspipe:latest self-test
+# Linux
+sudo apt install ffmpeg
+# Or build from source with v360 enabled
+```
 
+---
+
+### Issue: RealityCapture fails silently
+
+**Symptoms**:
+- No camera_poses.csv or empty file
+- PLY file too small (<1KB)
+
+**Diagnosis**:
+```bash
+# Check RealityCapture output directory
+ls -lh output/realitycapture_output/
+
+# Check logs for RC errors
+jq 'select(.module=="reality_capture") | select(.level=="ERROR")' output/logs/*.log
+
+# Verify XML configuration
+cat RC_Settings/reg_export.xml | grep calexHasDisabled
+```
+
+**Solution**:
+```bash
+# Ensure XML files have correct settings
+# reg_export.xml should contain:
+# 
+
+# Test RealityCapture manually
+RealityCapture.exe -addFolder output/cubemap_images/ -align -quit
+```
+
+---
+
+### Issue: PostShot reports "No poses found"
+
+**Symptoms**:
+```json
+{"level": "ERROR", "message": "No camera poses available"}
+```
+
+**Diagnosis**:
+```bash
+# Check CSV file
+head output/realitycapture_output/camera_poses.csv
+
+# Count data rows (excluding header)
+tail -n +2 output/realitycapture_output/camera_poses.csv | wc -l
+
+# Verify pose count in logs
+jq 'select(.message | contains("pose"))' output/logs/*.log
+```
+
+**Solution**:
+```bash
+# If CSV exists but empty, RealityCapture alignment failed
+# Re-run RealityCapture step:
+rm output/realitycapture_output/*.ok
+python -m gaspipe.cli resume output/
+```
+
+**Known Fix Applied**: `_count_poses()` now skips CSV header correctly
+
+---
+
+### Issue: Pipeline timeout
+
+**Symptoms**:
+```json
+{"level": "ERROR", "message": "timeout", "meta": {"stderr": "..."}}
+```
+
+**Diagnosis**:
+```bash
+# Check running processes
+ps aux | grep -E 'ffmpeg|RealityCapture|postshot'
+
+# View recent timeout logs
+tail -f output/logs/*.log | jq 'select(.message | contains("timeout"))'
+```
+
+**Solution**:
+```bash
+# Increase timeout in config.json
+{
+  "processing": {
+    "timeout_minutes": 60  // Increase from default 15
+  }
+}
+
+# Or for PostShot specifically, reduce training steps
+{
+  "postshot": {
+    "steps": 10  // Reduce from 25
+  }
+}
+```
+
+---
+
+### Issue: Pipeline very slow
+
+**Symptoms**: Processing takes hours
+
+**Diagnosis**:
+```bash
+# Check step durations
+jq '.manifest[] | {
+  step, 
+  duration: ((.completed_at | fromdateiso8601) - 
+             (.started_at | fromdateiso8601))
+}' output/checkpoint.json
+```
+
+**Optimization Steps**:
+
+1. **Reduce FPS**
+   ```json
+   {"video": {"fps": 0.5}}  // Instead of 2.0
+   ```
+
+2. **Lower Resolution**
+   ```json
+   {"video": {"resolution": "2K"}}  // Instead of 4K
+   ```
+
+3. **Use JPG Medium**
+   ```json
+   {
+     "video": {"format": "JPG", "quality": "medium"},
+     "cubemap": {"format": "JPG", "quality": "medium"}
+   }
+   ```
+
+4. **Reduce Training Steps**
+   ```json
+   {"postshot": {"steps": 10}}  // Instead of 25
+   ```
+
+---
+
+### Issue: Disk full
+
+**Symptoms**:
+```
+No space left on device
+```
+
+**Diagnosis**:
+```bash
+# Check available space
+df -h output/
+
+# Check output sizes
+du -sh output/*/
+```
+
+**Solution**:
+```bash
+# Clean intermediate files (after successful completion)
+# Remove frames (largest)
+rm -rf output/frames/
+
+# Remove cubemap images
+rm -rf output/cubemap_images/
+
+# Keep only final outputs
+# - checkpoint.json
+# - gaussian_splat/*.psht
+# - logs/
+```
+
+**Space Requirements** (30-second 4K video):
+- Frames: ~500 MB
+- Cubemap: ~3 GB
+- RealityCapture: ~100 MB
+- PostShot: ~500 MB
+- **Total**: ~4-5 GB
+
+---
+
+### Issue: Resume not working
+
+**Symptoms**: Pipeline starts from beginning
+
+**Diagnosis**:
+```bash
+# Check if checkpoint exists
+ls output/checkpoint.json
+
+# Verify checkpoint is valid JSON
 jq '.' output/checkpoint.json || echo "INVALID JSON"
 
-# Restore from backup (if exists)
+# Check step statuses
+jq '.manifest[] | {step, status}' output/checkpoint.json
+```
+
+**Solution**:
+```bash
+# If checkpoint corrupted, restore from backup
 cp output/checkpoint.json.bak output/checkpoint.json
 
 # Or restart from beginning
 rm output/checkpoint.json
-python -m src.gaspipe.cli run input.mp4 output/
+python -m gaspipe.cli run input.mp4 output/
+```
 
-ls -l output/realitycapture_output/
-jq '.manifest[] | select(.step=="realitycapture")' output/checkpoint.json
+---
 
-# Remove RealityCapture .ok markers
-rm output/realitycapture_output/*.ok
+## Performance Monitoring
 
-# Resume pipeline
-python -m src.gaspipe.cli resume output/
+### Watch Pipeline Progress
 
-# Check running processes
-ps aux | grep -E 'ffmpeg|RealityCapture|postshot'
-
-# View recent log entries
-tail -f output/logs/*.log | jq 'select(.message | contains("timeout"))'
-
-# Increase timeout (requires code change in config)
-# Or split processing into smaller chunks
-
-# For PostShot timeout, reduce training steps:
-# Edit config: "trainsteps": 10  # instead of 25
-
-# Watch checkpoint updates
+```bash
+# Monitor checkpoint updates
 watch -n 5 'jq ".current_step" output/checkpoint.json'
 
 # Monitor log file growth
 watch -n 10 'ls -lh output/logs/*.log'
 
 # View step timestamps
-jq '.manifest[] | {step, started: .started_at, completed: .completed_at}' \
-  output/checkpoint.json
+jq '.manifest[] | {
+  step, 
+  started: .started_at, 
+  completed: .completed_at
+}' output/checkpoint.json
+```
 
-# Calculate average step duration (manual)
+### Resource Usage
 
-# Check available space
-df -h output/
-
-# Clean intermediate files after success
-find output/frames -name "*.ok" -delete
-find output/frames -name "*.png" -delete  # Keep only manifest
-
-# Monitor during execution
-while true; do
-  ps aux | grep -E 'python|ffmpeg|RealityCapture' | \
-    awk '{sum+=$6} END {print sum/1024 " MB"}'
-  sleep 5
-done
-
----
-
-## 7. REPOSITORY STRUCTURE
-
-gaspipe/
-├── .github/
-│   └── workflows/
-│       └── ci.yml                    # CI/CD pipeline
-├── docs/
-│   ├── design.md                     # Architecture design doc
-│   └── API.md                        # (Future) API documentation
-├── scripts/
-│   ├── mock_rc_cli.py               # Mock RealityCapture for tests
-│   └── mock_postshot_cli.py         # Mock PostShot for tests
-├── src/
-│   └── gaspipe/
-│       ├── init.py
-│       ├── cli.py                   # CLI entry point
-│       ├── types.py                 # Pydantic models
-│       ├── validate.py              # Validation functions
-│       ├── subprocess_wrapper.py    # Subprocess runner with retry
-│       ├── logging_config.py        # JSON logging setup
-│       ├── io_helpers.py            # Atomic file operations
-│       ├── config.py                # Configuration loader
-│       ├── pipeline.py              # Main pipeline orchestration
-│       ├── video_processor.py       # FFmpeg frame extraction
-│       ├── cubemap_generator.py     # Cubemap generation
-│       ├── reality_capture.py       # RealityCapture integration
-│       └── postshot_trainer.py      # PostShot training
-├── tests/
-│   ├── init.py
-│   ├── conftest.py                  # Pytest fixtures
-│   ├── test_types.py                # Type model tests
-│   ├── test_validate.py             # Validation tests
-│   ├── test_subprocess_wrapper.py   # Subprocess wrapper tests
-│   ├── test_io_helpers.py           # I/O helpers tests
-│   ├── test_logging_config.py       # Logging tests
-│   ├── test_pipeline_integration.py # End-to-end integration tests
-│   └── fixtures/
-│       ├── config.json              # Test configuration
-│       └── mini360.mp4              # Minimal test video
-├── .gitignore
-├── .ruff.toml                       # Ruff configuration
-├── Dockerfile
-├── LICENSE
-├── README.md
-├── RUNBOOK.md
-├── requirements.txt
-└── pyproject.toml                   # Python project metadata
-
----
-
-## 8. GIT WORKFLOW & PR INSTRUCTIONS
-
-### Branch Creation & Commits
 ```bash
-# Create feature branches
-git checkout -b feat/validate-subproc-logging
-git checkout -b test/integration-fixtures
-git checkout -b ci/docker
+# CPU usage (Linux)
+pidstat -p $PIPELINE_PID 1
 
-# Apply patches (example for types.py)
-# Save diff to file, then:
-git apply patches/types.py.patch
+# Memory usage
+free -h
 
-# Commit with conventional commits
-git add src/gaspipe/types.py
-git commit -m "feat(types): add Pydantic models FrameIndex CameraPose ProjectCheckpoint
+# Disk I/O
+iostat -x 1
 
-- Define immutable data models with validation
-- Add ValidationError for structured error responses
-- Enable type safety at module boundaries
+# GPU usage (if PostShot using GPU)
+nvidia-smi -l 1
+```
 
-Refs: #1"
+---
 
-# More commits following pattern
-git commit -m "feat(validate): implement structured validation with JSON errors"
-git commit -m "feat(subprocess): add retry wrapper with exponential backoff"
-git commit -m "feat(logging): implement JSON structured logging with run_id"
-git commit -m "feat(io): add atomic file operations with SHA256 checksums"
-git commit -m "feat(cli): implement CLI with run/resume/validate commands"
+## CI/CD Troubleshooting
 
-# Push branch
-git push -u origin feat/validate-subproc-logging
+### Docker Build Issues
 
+```bash
+# Verify Dockerfile
+docker build -t gaspipe:test .
+
+# Check image size
+docker images gaspipe --format "{{.Tag}} {{.Size}}"
+
+# Test container
+docker run --rm gaspipe:test self-test
+```
+
+### GitHub Actions Failures
+
+```bash
+# View workflow logs
+gh run view 
+
+# Download artifacts
+gh run download 
+
+# Re-run failed jobs
+gh run rerun  --failed
+```
+
+---
+
+## Maintenance Tasks
+
+### Clean Old Logs
+
+```bash
+# Remove logs older than 7 days
+find output/logs/ -name "*.log" -mtime +7 -delete
+
+# Archive old logs
+tar -czf logs_archive_$(date +%Y%m%d).tar.gz output/logs/
+```
+
+### Backup Project
+
+```bash
+# Backup entire project
+tar -czf gaspipe_backup_$(date +%Y%m%d).tar.gz \
+  --exclude='output/frames' \
+  --exclude='output/cubemap_images' \
+  output/
+
+# Backup only essentials
+tar -czf gaspipe_minimal_$(date +%Y%m%d).tar.gz \
+  output/checkpoint.json \
+  output/gaussian_splat/ \
+  output/logs/
+```
+
+---
+
+## Emergency Procedures
+
+### Force Stop Pipeline
+
+```bash
+# Find PID
+ps aux | grep "gaspipe.cli run"
+
+# Graceful stop (checkpoint saved)
+kill -SIGTERM 
+
+# Force kill (may corrupt checkpoint)
+kill -9 
+```
+
+### Rollback to Previous Version
+
+```bash
+# Git rollback
+git log --oneline
+git checkout 
+
+# Docker rollback
+docker tag gaspipe:latest gaspipe:latest-backup
+docker tag gaspipe: gaspipe:latest
+```
+
+---
+
+## Quick Reference
+
+### File Locations
+
+```
+output/
+├── checkpoint.json          # Resume state
+├── logs/<run_id>.log       # JSON logs
+├── frames/                  # Step 1 output
+├── cubemap_images/          # Step 2 output
+├── realitycapture_output/   # Step 3 output
+│   ├── sparse_points.ply
+│   └── camera_poses.csv
+└── gaussian_splat/          # Step 4 output (FINAL)
+    └── *.psht
+```
+
+### Exit Codes
+
+```
+0: Success
+1: General error
+2: Configuration error
+3: Validation error
+4: Subprocess failure
+5: Resume failure
+```
+
+### Important Commands
+
+```bash
+# Run
+python -m gaspipe.cli run input.mp4 output/
+
+# Resume
+python -m gaspipe.cli resume output/
+
+# Validate
+python -m gaspipe.cli validate-config config.json
+
+# Test
+python -m gaspipe.cli self-test
+
+# View logs
+jq '.' output/logs/*.log
+
+# Check status
+jq '.current_step' output/checkpoint.json
+```
+
+---
+
+**Last Updated**: 2025-09-29  
+**Version**: 0.1.0  
+**Maintainer**: TwiceOut Team
