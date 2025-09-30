@@ -130,24 +130,44 @@ def cmd_validate_config(args: argparse.Namespace) -> int:
 def cmd_self_test(args: argparse.Namespace) -> int:
     """Test external dependencies (FFmpeg, RC, PostShot)."""
     from .subprocess_wrapper import run_subprocess, SubprocessError
+    from .config import load_config
     
     print("Testing GaSPipe dependencies...\n")
+    
+    # Load config if provided
+    config = {}
+    if args.config:
+        try:
+            config = load_config(args.config)
+            print(f"Loaded configuration from: {args.config}\n")
+        except Exception as e:
+            print(f"Warning: Could not load config file: {e}\n")
     
     tests_passed = 0
     tests_failed = 0
     
-    # Test FFmpeg
+    # Test FFmpeg - use config path if available, otherwise default
+    ffmpeg_path = config.get('ffmpeg_path', 'ffmpeg')
     try:
-        output = run_subprocess(['ffmpeg', '-version'], timeout=10)
+        output = run_subprocess([ffmpeg_path, '-version'], timeout=10)
         version = output.split('\n')[0]
         print(f"✓ FFmpeg: {version}")
+        
+        # Also test v360 filter
+        output = run_subprocess([ffmpeg_path, '-filters'], timeout=10)
+        if 'v360' in output:
+            print(f"  ✓ v360 filter available")
+        else:
+            print(f"  ✗ v360 filter NOT available (required for cubemap generation)")
+            tests_failed += 1
+        
         tests_passed += 1
     except (SubprocessError, FileNotFoundError) as e:
         print(f"✗ FFmpeg: Not found or failed ({e})")
         tests_failed += 1
     
-    # Test RealityCapture (if path provided)
-    rc_path = args.rc_path or 'RealityCapture'
+    # Test RealityCapture - CLI args override config
+    rc_path = args.rc_path or config.get('rc_path', 'RealityCapture')
     try:
         run_subprocess([rc_path, '-help'], timeout=10)
         print(f"✓ RealityCapture: Available at {rc_path}")
@@ -156,8 +176,8 @@ def cmd_self_test(args: argparse.Namespace) -> int:
         print(f"✗ RealityCapture: Not found at {rc_path}")
         tests_failed += 1
     
-    # Test PostShot (if path provided)
-    ps_path = args.postshot_path or 'postshot-cli'
+    # Test PostShot - CLI args override config
+    ps_path = args.postshot_path or config.get('postshot_path', 'postshot-cli')
     try:
         run_subprocess([ps_path, '--help'], timeout=10)
         print(f"✓ PostShot: Available at {ps_path}")
@@ -165,6 +185,27 @@ def cmd_self_test(args: argparse.Namespace) -> int:
     except (SubprocessError, FileNotFoundError):
         print(f"✗ PostShot: Not found at {ps_path}")
         tests_failed += 1
+    
+    # Check RC Settings path if in config
+    if 'rc_settings_path' in config:
+        rc_settings = Path(config['rc_settings_path'])
+        if rc_settings.exists() and rc_settings.is_dir():
+            print(f"✓ RC Settings: Found at {rc_settings}")
+            # Check for required XML files
+            ply_xml = rc_settings / 'ply_export.xml'
+            reg_xml = rc_settings / 'reg_export.xml'
+            
+            if ply_xml.exists():
+                print(f"  ✓ ply_export.xml found")
+            else:
+                print(f"  ✗ ply_export.xml NOT found (required for export)")
+                
+            if reg_xml.exists():
+                print(f"  ✓ reg_export.xml found")
+            else:
+                print(f"  ✗ reg_export.xml NOT found (required for export)")
+        else:
+            print(f"✗ RC Settings: Directory not found at {config['rc_settings_path']}")
     
     print(f"\nResults: {tests_passed} passed, {tests_failed} failed")
     return EXIT_SUCCESS if tests_failed == 0 else EXIT_ERROR
@@ -197,10 +238,11 @@ def main() -> int:
     validate_parser.add_argument('config', type=Path, help='Configuration file')
     validate_parser.set_defaults(func=cmd_validate_config)
     
-    # self-test command
+    # self-test command - ENHANCED with --config support
     test_parser = subparsers.add_parser('self-test', help='Test dependencies')
-    test_parser.add_argument('--rc-path', help='RealityCapture binary path')
-    test_parser.add_argument('--postshot-path', help='PostShot CLI path')
+    test_parser.add_argument('--config', type=Path, help='Configuration file to load paths from')
+    test_parser.add_argument('--rc-path', help='RealityCapture binary path (overrides config)')
+    test_parser.add_argument('--postshot-path', help='PostShot CLI path (overrides config)')
     test_parser.set_defaults(func=cmd_self_test)
     
     args = parser.parse_args()

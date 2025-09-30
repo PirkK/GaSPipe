@@ -1,0 +1,70 @@
+{
+  "run_id": "7d684c4e-c6d7-467e-b7ce-8c1df45a676b",
+  "video_file": "C:\\Users\\Federico\\Desktop\\Test_GasPipe\\VillaBorghese001.mp4",
+  "output_dir": "output_test",
+  "current_step": "frames",
+  "manifest": [
+    {
+      "step": "frames",
+      "status": "failed",
+      "started_at": "2025-09-30T09:50:13.572669Z",
+      "completed_at": null,
+      "outputs": [],
+      "sha256_sums": {},
+      "error_message": "Command failed with code 4294967274: C:/Users/Federico/Desktop/Test_GasPipe/ffmpeg-8.0-full_build/ffmpeg-8.0-full_build/bin/ffmpeg.exe -i C:\\Users\\Federico\\Desktop\\Test_GasPipe\\VillaBorghese001.mp4 -vf fps=1.0,scale=3840:1920,format=rgb24,colorspace=bt709 -pix_fmt rgb24 -y output_test\\frames\\frame_%06d.png"
+    },
+    {
+      "step": "cubemap",
+      "status": "pending",
+      "started_at": "2025-09-30T09:50:13.572715Z",
+      "completed_at": null,
+      "outputs": [],
+      "sha256_sums": {},
+      "error_message": null
+    },
+    {
+      "step": "realitycapture",
+      "status": "pending",
+      "started_at": "2025-09-30T09:50:13.572718Z",
+      "completed_at": null,
+      "outputs": [],
+      "sha256_sums": {},
+      "error_message": null
+    },
+    {
+      "step": "postshot",
+      "status": "pending",
+      "started_at": "2025-09-30T09:50:13.572721Z",
+      "completed_at": null,
+      "outputs": [],
+      "sha256_sums": {},
+      "error_message": null
+    }
+  ],
+  "config_snapshot": {
+    "ffmpeg_path": "C:/Users/Federico/Desktop/Test_GasPipe/ffmpeg-8.0-full_build/ffmpeg-8.0-full_build/bin/ffmpeg.exe",
+    "rc_path": "C:/Program Files/Epic Games/RealityScan_2.0/RealityScan.exe",
+    "postshot_path": "C:/Program Files/Jawset Postshot/bin/postshot-cli.exe",
+    "rc_settings_path": "C:/Users/Federico/Desktop/Test_GasPipe/RC_Settings",
+    "video": {
+      "fps": 1.0,
+      "resolution": "4K",
+      "format": "PNG",
+      "quality": "high"
+    },
+    "cubemap": {
+      "size": "1920x1920",
+      "format": "PNG",
+      "quality": "high"
+    },
+    "postshot": {
+      "profile": "Splat MCMC",
+      "steps": 25
+    },
+    "processing": {
+      "timeout_minutes": 15
+    }
+  },
+  "created_at": "2025-09-30T09:50:13.572723Z",
+  "updated_at": "2025-09-30T09:50:14.341812Z"
+}

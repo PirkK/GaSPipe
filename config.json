@@ -1,0 +1,10 @@
+{ 
+  "ffmpeg_path": "C:/Users/Federico/Desktop/Test_GasPipe/ffmpeg-8.0-full_build/ffmpeg-8.0-full_build/bin/ffmpeg.exe", 
+  "rc_path": "C:/Program Files/Epic Games/RealityScan_2.0/RealityScan.exe", 
+  "postshot_path": "C:/Program Files/Jawset Postshot/bin/postshot-cli.exe", 
+  "rc_settings_path": "C:/Users/Federico/Desktop/Test_GasPipe/RC_Settings", 
+  "video": {"fps": 1.0, "resolution": "4K", "format": "PNG", "quality": "high"}, 
+  "cubemap": {"size": "1920x1920", "format": "PNG", "quality": "high"}, 
+  "postshot": {"profile": "Splat MCMC", "steps": 25}, 
+  "processing": {"timeout_minutes": 15} 
+} 
