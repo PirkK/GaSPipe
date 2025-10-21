@@ -1,40 +1,44 @@
 {
-  "run_id": "7d684c4e-c6d7-467e-b7ce-8c1df45a676b",
+  "run_id": "79ee3eba-5651-4149-a958-897c68928c7c",
   "video_file": "C:\\Users\\Federico\\Desktop\\Test_GasPipe\\VillaBorghese001.mp4",
   "output_dir": "output_test",
-  "current_step": "frames",
+  "current_step": "realitycapture",
   "manifest": [
     {
       "step": "frames",
-      "status": "failed",
-      "started_at": "2025-09-30T09:50:13.572669Z",
-      "completed_at": null,
-      "outputs": [],
+      "status": "completed",
+      "started_at": "2025-10-21T15:25:46.182577Z",
+      "completed_at": "2025-10-21T15:26:28.746217Z",
+      "outputs": [
+        "output_test\\frames"
+      ],
       "sha256_sums": {},
-      "error_message": "Command failed with code 4294967274: C:/Users/Federico/Desktop/Test_GasPipe/ffmpeg-8.0-full_build/ffmpeg-8.0-full_build/bin/ffmpeg.exe -i C:\\Users\\Federico\\Desktop\\Test_GasPipe\\VillaBorghese001.mp4 -vf fps=1.0,scale=3840:1920,format=rgb24,colorspace=bt709 -pix_fmt rgb24 -y output_test\\frames\\frame_%06d.png"
+      "error_message": null
     },
     {
       "step": "cubemap",
-      "status": "pending",
-      "started_at": "2025-09-30T09:50:13.572715Z",
-      "completed_at": null,
-      "outputs": [],
+      "status": "completed",
+      "started_at": "2025-10-21T15:25:46.182626Z",
+      "completed_at": "2025-10-21T15:31:10.077300Z",
+      "outputs": [
+        "output_test\\cubemap_images"
+      ],
       "sha256_sums": {},
       "error_message": null
     },
     {
       "step": "realitycapture",
-      "status": "pending",
-      "started_at": "2025-09-30T09:50:13.572718Z",
+      "status": "failed",
+      "started_at": "2025-10-21T15:25:46.182629Z",
       "completed_at": null,
       "outputs": [],
       "sha256_sums": {},
-      "error_message": null
+      "error_message": "RealityCapture did not create valid sparse point cloud"
     },
     {
       "step": "postshot",
       "status": "pending",
-      "started_at": "2025-09-30T09:50:13.572721Z",
+      "started_at": "2025-10-21T15:25:46.182631Z",
       "completed_at": null,
       "outputs": [],
       "sha256_sums": {},
@@ -65,6 +69,6 @@
       "timeout_minutes": 15
     }
   },
-  "created_at": "2025-09-30T09:50:13.572723Z",
-  "updated_at": "2025-09-30T09:50:14.341812Z"
+  "created_at": "2025-10-21T15:25:46.182633Z",
+  "updated_at": "2025-10-21T15:54:56.471067Z"
 }

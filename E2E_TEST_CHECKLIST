@@ -1,0 +1,195 @@
+- [ ] **Test JPG vs PNG**
+  - [ ] PNG format (lossless)
+  - [ ] JPG high quality
+  - [ ] JPG medium quality
+
+- [ ] **Compare Results**
+  ```bash
+  du -sh output_*/gaussian_splat/*.psht
+  ```
+
+**Test Result**: ✅ PASS / ❌ FAIL
+
+---
+
+### Test 5: Error Handling
+
+- [ ] **Test Invalid Video**
+  ```bash
+  python -m gaspipe.cli run invalid.mp4 output_error/
+  # Expected: Clear error, exit code != 0
+  ```
+
+- [ ] **Test Missing Config**
+  ```bash
+  python -m gaspipe.cli run test.mp4 output/ --config none.json
+  # Expected: Config error, exit code 2
+  ```
+
+- [ ] **Test Invalid RC Path**
+  ```bash
+  # Edit config with wrong path
+  python -m gaspipe.cli run test.mp4 output/
+  # Expected: Subprocess error during RC step
+  ```
+
+**Test Result**: ✅ PASS / ❌ FAIL
+
+---
+
+## 📊 Performance Benchmarking
+
+### Metrics to Collect
+
+- [ ] **Processing Time per Step**
+  ```bash
+  jq '.manifest[] | {
+    step: .step, 
+    duration: ((.completed_at | fromdateiso8601) - 
+               (.started_at | fromdateiso8601))
+  }' output/checkpoint.json
+  ```
+
+- [ ] **Output Sizes**
+  ```bash
+  du -sh output/frames/
+  du -sh output/cubemap_images/
+  du -sh output/realitycapture_output/
+  du -sh output/gaussian_splat/
+  du -sh output/
+  ```
+
+### Expected Performance (Reference)
+
+| Video Length | FPS | Resolution | Total Time | Disk Usage |
+|--------------|-----|------------|------------|------------|
+| 30 sec       | 1   | 4K         | 10-20 min  | ~1.5 GB    |
+| 60 sec       | 2   | 4K         | 30-45 min  | ~5 GB      |
+| 60 sec       | 1   | 8K         | 45-60 min  | ~10 GB     |
+
+---
+
+## 🐛 Troubleshooting Guide
+
+### Issue: FFmpeg v360 filter not found
+
+**Solution**:
+```bash
+# Install FFmpeg with v360
+snap install ffmpeg
+```
+
+---
+
+### Issue: RealityCapture fails silently
+
+**Checks**:
+```bash
+# Verify RC manually
+RealityCapture -addFolder output/cubemap_images/ -align -quit
+
+# Check XML files
+cat RC_Settings/reg_export.xml
+```
+
+**Solution**: Update XML files to include disabled cameras
+
+---
+
+### Issue: PostShot reports "No poses found"
+
+**Checks**:
+```bash
+# Verify CSV format
+head output/realitycapture_output/camera_poses.csv
+
+# Count data rows
+tail -n +2 output/realitycapture_output/camera_poses.csv | wc -l
+```
+
+---
+
+### Issue: Pipeline very slow
+
+**Optimization**:
+1. Reduce FPS (1 or 0.5)
+2. Use 4K instead of 8K
+3. Use JPG medium quality
+4. Reduce PostShot steps to 10-15k
+
+---
+
+## ✅ Test Completion Criteria
+
+Pipeline is **production-ready** when:
+
+- [ ] ✅ All 5 test scenarios pass
+- [ ] ✅ Resume works at any interruption
+- [ ] ✅ Error messages are actionable
+- [ ] ✅ Performance within expected ranges
+- [ ] ✅ Output quality verified
+- [ ] ✅ No manual intervention needed
+
+---
+
+## 📝 Test Report Template
+
+```markdown
+# GaSPipe E2E Test Report
+
+**Date**: YYYY-MM-DD
+**Tester**: [Name]
+**Environment**: [OS, Python version]
+
+## Test Summary
+- Total Tests: 5
+- Passed: X
+- Failed: Y
+
+## Test Results
+
+### Test 1: Dependency Validation
+**Result**: ✅ PASS / ❌ FAIL
+
+### Test 2: Full Pipeline
+**Result**: ✅ PASS / ❌ FAIL
+**Video**: [Name, duration]
+**Duration**: XX minutes
+**Output**: XX GB
+
+### Test 3: Resume
+**Result**: ✅ PASS / ❌ FAIL
+
+### Test 4: Config Variations
+**Result**: ✅ PASS / ❌ FAIL
+
+### Test 5: Error Handling
+**Result**: ✅ PASS / ❌ FAIL
+
+## Performance Metrics
+| Step | Duration | Memory | Notes |
+|------|----------|--------|-------|
+| Frames | XX min | XX GB | ... |
+| Cubemap | XX min | XX GB | ... |
+| RC | XX min | XX GB | ... |
+| PostShot | XX min | XX GB | ... |
+
+## Issues Found
+1. [Issue description]
+
+## Recommendations
+- [ ] Recommendation 1
+
+## Conclusion
+[Assessment]
+
+**Signed**: [Name]
+```
+
+---
+
+**Next Steps After Testing**:
+1. Document issues in GitHub
+2. Update RUNBOOK.md
+3. Optimize bottlenecks
+4. Proceed to CI/CD

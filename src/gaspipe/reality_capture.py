@@ -49,7 +49,8 @@ class RealityCaptureProcessor:
         
         cmd = [
             self.rc_path,
-            '-addFolder', str(images_dir),
+            '-newScene',
+            '-addFolder', str(images_dir.resolve()),
             '-align',
             '-selectMaximalComponent',
             '-calculateNormalModel',

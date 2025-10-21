@@ -53,7 +53,7 @@ class VideoProcessor:
         cmd = [
             self.ffmpeg_path,
             '-i', str(video_file),
-            '-vf', f'fps={fps},scale={width}:{height},format=rgb24,colorspace=bt709',
+            '-vf', f'fps={fps},scale={width}:{height}',
         ]
         
         # Format-specific options
