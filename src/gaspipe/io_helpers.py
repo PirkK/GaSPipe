@@ -5,7 +5,48 @@ Atomic file operations and integrity helpers.
 import hashlib
 import tempfile
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional
+
+
+def get_marker_path(file_path: Path, marker_type: str) -> Path:
+    """
+    Get the path for marker files (.ok, .sha256) in separate .markers directory.
+    
+    Args:
+        file_path: Original file path
+        marker_type: Type of marker ('ok' or 'sha256')
+    
+    Returns:
+        Path to marker file in .markers directory
+    """
+    # Find the output root directory
+    parts = file_path.parts
+    output_idx = None
+    
+    # Look for directory that contains 'output' in the path
+    for i, part in enumerate(parts):
+        if 'output' in part:
+            output_idx = i
+            break
+    
+    if output_idx is None:
+        # Fallback: use parent directory
+        output_root = file_path.parent.parent
+    else:
+        output_root = Path(*parts[:output_idx+1])
+    
+    # Build relative path from output root
+    try:
+        relative_path = file_path.relative_to(output_root)
+    except ValueError:
+        # If file is not relative to output_root, use just filename
+        relative_path = Path(file_path.parent.name) / file_path.name
+    
+    # Create marker directory structure
+    marker_dir = output_root / '.markers' / relative_path.parent
+    marker_dir.mkdir(parents=True, exist_ok=True)
+    
+    return marker_dir / f"{file_path.name}.{marker_type}"
 
 
 def atomic_write(path: Path, data: Union[str, bytes], mode: str = 'w') -> None:
@@ -53,13 +94,13 @@ def compute_sha256(file_path: Path) -> str:
 
 def write_ok_and_sha(file_path: Path) -> tuple[Path, Path]:
     """
-    Create .ok marker and .sha256 checksum file.
+    Create .ok marker and .sha256 checksum file in .markers directory.
     
     Returns:
         Tuple of (ok_path, sha_path)
     """
-    ok_path = file_path.with_suffix(file_path.suffix + '.ok')
-    sha_path = file_path.with_suffix(file_path.suffix + '.sha256')
+    ok_path = get_marker_path(file_path, 'ok')
+    sha_path = get_marker_path(file_path, 'sha256')
     
     # Compute and write SHA256
     checksum = compute_sha256(file_path)
@@ -73,27 +114,63 @@ def write_ok_and_sha(file_path: Path) -> tuple[Path, Path]:
 
 def verify_file_integrity(file_path: Path) -> bool:
     """
-    Verify file integrity using .sha256 checksum.
+    Verify file integrity using .sha256 checksum from .markers directory.
     
     Returns:
         True if checksum matches, False otherwise
     """
-    sha_path = file_path.with_suffix(file_path.suffix + '.sha256')
+    sha_path = get_marker_path(file_path, 'sha256')
     
     if not sha_path.exists():
         return False
     
-    expected_checksum = sha_path.read_text().strip()
-    actual_checksum = compute_sha256(file_path)
-    
-    return expected_checksum == actual_checksum
+    try:
+        expected_checksum = sha_path.read_text().strip()
+        actual_checksum = compute_sha256(file_path)
+        
+        return expected_checksum == actual_checksum
+    except Exception:
+        return False
 
 
 def is_completed(file_path: Path) -> bool:
-    """Check if file has .ok marker and valid checksum."""
-    ok_path = file_path.with_suffix(file_path.suffix + '.ok')
+    """Check if file has .ok marker and valid checksum in .markers directory."""
+    ok_path = get_marker_path(file_path, 'ok')
     
     if not ok_path.exists():
         return False
     
     return verify_file_integrity(file_path)
+
+
+def cleanup_markers(file_path: Path) -> None:
+    """
+    Remove marker files for a given file.
+    Useful when you want to force regeneration.
+    
+    Args:
+        file_path: Original file path whose markers to remove
+    """
+    ok_path = get_marker_path(file_path, 'ok')
+    sha_path = get_marker_path(file_path, 'sha256')
+    
+    ok_path.unlink(missing_ok=True)
+    sha_path.unlink(missing_ok=True)
+
+
+def list_completed_files(directory: Path, pattern: str = "*") -> list[Path]:
+    """
+    List all files in directory that have been completed (have .ok markers).
+    
+    Args:
+        directory: Directory to scan
+        pattern: Glob pattern for files (default: "*")
+    
+    Returns:
+        List of completed file paths
+    """
+    completed = []
+    for file_path in directory.glob(pattern):
+        if file_path.is_file() and is_completed(file_path):
+            completed.append(file_path)
+    return completed
